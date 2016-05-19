@@ -3,7 +3,10 @@ package com.socrata.computation_strategies
 import com.rojoma.json.v3.ast.{JValue, JString}
 import com.rojoma.json.v3.codec.{DecodeError, JsonDecode, JsonEncode}
 
-sealed abstract class StrategyType(val name: String)
+sealed abstract class StrategyType(val name: String) {
+
+  final override def toString = name
+}
 
 object StrategyType {
 
@@ -26,22 +29,28 @@ object StrategyType {
     GeoRegion
   )
 
+  private val nameMap: Map[String, StrategyType] = StrategyType.allStrategyTypes.map { st =>
+    (st.name, st)
+  } (scala.collection.breakOut)
+
   implicit object codec extends JsonEncode[StrategyType] with JsonDecode[StrategyType] {
-    val codecMap: Map[StrategyType, String] = allStrategyTypes.map { st =>
-      (st, st.name)
-    } (scala.collection.breakOut)
-    val invCodecMap = codecMap.map(_.swap).toMap
+    val codecMap = nameMap.map(_.swap).toMap
+    assert(codecMap.size == nameMap.size)
 
     def encode(s: StrategyType) = JString(codecMap(s))
     def decode(x: JValue) = x match {
       case JString(s) =>
-        invCodecMap.get(s) match {
+        nameMap.get(s) match {
           case Some(v) => Right(v)
           case None => Left(DecodeError.InvalidValue(x))
         }
       case _ =>
         Left(DecodeError.InvalidType(expected = JString, got = x.jsonType))
     }
+  }
+
+  def withName(name: String): Option[StrategyType] = {
+    nameMap.get(name)
   }
 
   def fromCuratedRegions(typ: StrategyType) = fromCuratedRegionsSet.contains(typ)
