@@ -56,7 +56,10 @@ object FlexibleGeocodingDefaults {
   def empty = FlexibleGeocodingDefaults(None, None, None, None, None, None)
 }
 
-case class GeocodingParameterSchema[T](sources: GeocodingSources[T], defaults: GeocodingDefaults, version: String)
+case class GeocodingParameterSchema[T](sources: GeocodingSources[T],
+                                       defaults: GeocodingDefaults,
+                                       provider: Option[String],
+                                       version: String)
   extends ParameterSchema
 
 object GeocodingParameterSchema {
@@ -66,13 +69,14 @@ object GeocodingParameterSchema {
 
 case class FlexibleGeocodingParameterSchema[T](sources: Option[GeocodingSources[T]],
                                                defaults: Option[FlexibleGeocodingDefaults],
+                                               provider: Option[String],
                                                version: Option[String])
 
 object FlexibleGeocodingParameterSchema {
   implicit def encoder[T : JsonEncode] = AutomaticJsonEncodeBuilder[FlexibleGeocodingParameterSchema[T]]
   implicit def decoder[T : JsonDecode] = AutomaticJsonDecodeBuilder[FlexibleGeocodingParameterSchema[T]]
 
-  def empty[T] = FlexibleGeocodingParameterSchema[T](None, None, None)
+  def empty[T] = FlexibleGeocodingParameterSchema[T](None, None, None, None)
 }
 
 /**
@@ -93,9 +97,10 @@ object FlexibleGeocodingParameterSchema {
  *       "defaults": {
  *           "region": "WA",
  *           "country": "US" },
+ *       "provider": "esri",
  *       "version": "v1" }}
  */
-object GeocodingComputationStrategy extends ComputationStrategy with Augment[FlexibleGeocodingDefaults] {
+object GeocodingComputationStrategy extends ComputationStrategy with Augment[(FlexibleGeocodingDefaults, Option[String])] {
 
   val apiVersion = "v1"
   val apiVersions = Set(apiVersion)
@@ -118,7 +123,7 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
     extends ValidationError(s"Unknown geocoding api version: $version.")
 
   override def augment[ColumnName : JsonDecode : JsonEncode](definition: StrategyDefinition[ColumnName],
-                                                             info: FlexibleGeocodingDefaults):
+                                                             info: (FlexibleGeocodingDefaults, Option[String]):
   Either[ValidationError, StrategyDefinition[ColumnName]] = {
     JsonDecode.fromJValue[FlexibleGeocodingParameterSchema[ColumnName]](definition.parameters.getOrElse(JObject.canonicalEmpty)) match {
       case Right(schema) =>
@@ -133,8 +138,9 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
 
   // should augment a valid FlexibleGeocodingParameterSchema to be a valid GeocodingParameterSchema
   private def augment[ColumnName](flexibleStrategy: FlexibleGeocodingParameterSchema[ColumnName],
-                                  envDefaults: FlexibleGeocodingDefaults): GeocodingParameterSchema[ColumnName] = {
-    val FlexibleGeocodingParameterSchema(sources, defaults, version) = flexibleStrategy
+                                  envInfo: (FlexibleGeocodingDefaults, Option[String])): GeocodingParameterSchema[ColumnName] = {
+    val FlexibleGeocodingParameterSchema(sources, defaults, provider, version) = flexibleStrategy
+    val (envDefaults, envProvider) = envInfo
     GeocodingParameterSchema(
       sources.getOrElse(GeocodingSources.empty[ColumnName]),
       defaults match {
@@ -155,6 +161,7 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
             envDefaults.postalCode,
             envDefaults.country.getOrElse(defaultUS))
       },
+      provider.orElse(envProvider),
       version.getOrElse(apiVersion)
     )
   }
