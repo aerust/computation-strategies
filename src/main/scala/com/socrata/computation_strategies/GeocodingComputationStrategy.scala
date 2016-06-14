@@ -162,50 +162,42 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
 
   override protected def validate[ColumnName : JsonDecode](definition: StrategyDefinition[ColumnName],
                                                            columns: Option[Map[ColumnName, SoQLType]]):
-    Option[ValidationError] = {
-      val StrategyDefinition(typ, optSourceColumns, optParameters) = definition
-      typ match {
-        case StrategyType.Geocoding =>
-          val parameters = optParameters match {
-            case Some(obj) => JsonDecode.fromJValue[GeocodingParameterSchema[ColumnName]](obj) match {
-              case Right(res) => res
-              case Left(error) => error match {
-                case DecodeError.MissingField(field, Path.empty) => return Some(MissingParameter(field))
-                case _ => return Some(InvalidStrategyParameters(error))
-              }
-            }
-            case None => return Some(MissingParameters(GeocodingParameterSchema))
-          }
+    Option[ValidationError] = definition match {
+      case StrategyDefinition(StrategyType.Geocoding, optSourceColumns, Some(obj)) =>
+        val parameters = JsonDecode.fromJValue[GeocodingParameterSchema[ColumnName]](obj) match {
+          case Right(res) => res
+          case Left(DecodeError.MissingField(field, Path.empty)) => return Some(MissingParameter(field))
+          case Left(error) => return Some(InvalidStrategyParameters(error))
+        }
 
-          // source columns and parameters.sources should match
-          val sourceColumns = optSourceColumns.getOrElse(Seq.empty)
-          val paramSources = GeocodingSources.toSet[ColumnName](parameters.sources)
-          if (!sourceColumns.toSet.equals(paramSources))
-            return Some(GeocodingSourcesDoNotMatchSourceColumns(sourceColumns, Some(parameters.sources)))
+        // source columns and parameters.sources should match
+        val sourceColumns = optSourceColumns.getOrElse(Seq.empty)
+        val paramSources = GeocodingSources.toSet[ColumnName](parameters.sources)
+        if (!sourceColumns.toSet.equals(paramSources))
+          return Some(GeocodingSourcesDoNotMatchSourceColumns(sourceColumns, Some(parameters.sources)))
 
-          // source columns should have the correct soql type
-          columns.foreach { cols =>
-            val sources = parameters.sources
-            val sourceColumnTypeErrors = Seq(
-              validateSoQLType(sources.address, cols),
-              validateSoQLType(sources.locality, cols),
-              validateSoQLType(sources.subregion, cols),
-              validateSoQLType(sources.region, cols),
-              validateSoQLType(sources.postalCode, cols, numberOkay = true),
-              validateSoQLType(sources.country, cols)
-            )
-            if (sourceColumnTypeErrors.exists(_.isDefined)) return sourceColumnTypeErrors.filter(_.isDefined).head
-          }
+        // source columns should have the correct soql type
+        columns.foreach { cols =>
+          val sources = parameters.sources
+          val sourceColumnTypeErrors = Seq(
+            validateSoQLType(sources.address, cols),
+            validateSoQLType(sources.locality, cols),
+            validateSoQLType(sources.subregion, cols),
+            validateSoQLType(sources.region, cols),
+            validateSoQLType(sources.postalCode, cols, numberOkay = true),
+            validateSoQLType(sources.country, cols)
+          )
+          if (sourceColumnTypeErrors.exists(_.isDefined)) return sourceColumnTypeErrors.filter(_.isDefined).head
+        }
 
-          // country default is insured by successfully decoding
+        // country default is insured by successfully decoding
 
-          // the version should be valid
-          if (!apiVersions.contains(parameters.version))
-            return Some(UnknownGeocodingApiVersion(parameters.version))
+        // the version should be valid
+        if (!apiVersions.contains(parameters.version)) return Some(UnknownGeocodingApiVersion(parameters.version))
 
-          None
-      case other => Some(WrongStrategyType(received = other, expected = strategyType))
-      }
+        None
+      case StrategyDefinition(StrategyType.Geocoding, _, None) => Some(MissingParameters(GeocodingParameterSchema))
+      case StrategyDefinition(other, _, _) => Some(WrongStrategyType(received = other, expected = strategyType))
     }
 
   private def validateSoQLType[ColumnName](optName: Option[ColumnName],

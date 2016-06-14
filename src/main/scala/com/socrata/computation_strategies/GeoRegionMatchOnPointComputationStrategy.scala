@@ -40,13 +40,21 @@ object GeoRegionMatchOnPointComputationStrategy extends ComputationStrategy {
 
   override protected def validate[ColumnName: JsonDecode](definition: StrategyDefinition[ColumnName],
                                                           columns: Option[Map[ColumnName, SoQLType]]):
-    Option[ValidationError] = {
-      // TODO: do we want to do something better for the resource name type parameter?
-      GeoRegionMatchStrategy.validate[ColumnName, GeoRegionMatchOnPointParameterSchema[String, ColumnName]](
-        strategyType,
-        SoQLPoint,
-        GeoRegionMatchOnPointParameterSchema,
-        definition,
-        columns)
+    // TODO: do we want to do something better for the resource name type parameter?
+    Option[ValidationError] = definition.typ match {
+      case StrategyType.GeoRegion =>
+        GeoRegionMatchStrategy.validate[ColumnName, GeoRegionMatchOnPointParameterSchema[String, ColumnName]](
+          StrategyType.GeoRegion,
+          SoQLPoint,
+          GeoRegionMatchOnPointParameterSchema,
+          definition,
+          columns)
+      case _ =>
+        GeoRegionMatchStrategy.validate[ColumnName, GeoRegionMatchOnPointParameterSchema[String, ColumnName]](
+          StrategyType.GeoRegionMatchOnPoint,
+          SoQLPoint,
+          GeoRegionMatchOnPointParameterSchema,
+          definition,
+          columns)
     }
 }
