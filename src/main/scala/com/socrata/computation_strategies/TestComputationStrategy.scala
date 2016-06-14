@@ -5,10 +5,12 @@ import com.rojoma.json.v3.util.{AutomaticJsonCodecBuilder, Strategy, JsonKeyStra
 import com.socrata.soql.types.{SoQLText, SoQLType}
 
 @JsonKeyStrategy(Strategy.Underscore)
-case class TestParameterSchema(concatText: String) extends ParameterSchema
+case class TestParameterSchema(concatText: String)
 
-object TestParameterSchema {
+object TestParameterSchema extends ParameterSchema {
   implicit val codec = AutomaticJsonCodecBuilder[TestParameterSchema]
+
+  override def requiredFields = Seq("concat_text")
 }
 
 /**
@@ -31,36 +33,36 @@ object TestComputationStrategy extends ComputationStrategy {
 
   override protected def validate[ColumnName : JsonDecode](definition: StrategyDefinition[ColumnName],
                                                            columns: Option[Map[ColumnName, SoQLType]]):
-  Option[ValidationError] = {
-    val StrategyDefinition(typ, optSourceColumns, optParameters) = definition
-    typ match {
-      case StrategyType.Test =>
-        optSourceColumns match {
-          case Some(sourceColumns) =>
-            sourceColumns.length match {
-              case 1 =>
-                // validate type of source column optionally
-                if (columns.isDefined) {
-                  val name = sourceColumns.head
-                  val error = columns.get.get(name) match {
-                    case Some(SoQLText) => None
-                    case Some(other) => Some(WrongSourceColumnType(name, other, SoQLText))
-                    case None => Some(UnknownSourceColumn(name))
+    Option[ValidationError] = {
+      val StrategyDefinition(typ, optSourceColumns, optParameters) = definition
+      typ match {
+        case StrategyType.Test =>
+          optSourceColumns match {
+            case Some(sourceColumns) =>
+              sourceColumns.length match {
+                case 1 =>
+                  // validate type of source column optionally
+                  if (columns.isDefined) {
+                    val name = sourceColumns.head
+                    val error = columns.get.get(name) match {
+                      case Some(SoQLText) => None
+                      case Some(other) => Some(WrongSourceColumnType(name, other, SoQLText))
+                      case None => Some(UnknownSourceColumn(name))
+                    }
+                    if (error.isDefined) return error
                   }
-                  if (error.isDefined) return error
-                }
-                optParameters match {
-                  case Some(obj) => JsonDecode.fromJValue[TestParameterSchema](obj) match {
-                    case Right(parameters) => None
-                    case Left(error) => Some(InvalidStrategyParameters(error))
+                  optParameters match {
+                    case Some(obj) => JsonDecode.fromJValue[TestParameterSchema](obj) match {
+                      case Right(parameters) => None
+                      case Left(error) => Some(InvalidStrategyParameters(error))
+                    }
+                    case None => Some(MissingParameters(TestParameterSchema))
                   }
-                  case None => Some(MissingParameters(strategyType))
-                }
-              case other => Some(WrongNumberOfSourceColumns(received = other, expected = 1))
-            }
-          case None => Some(MissingSourceColumns(strategyType))
-        }
-      case other => Some(WrongStrategyType(received = other, expected = strategyType))
+                case other => Some(WrongNumberOfSourceColumns(received = other, expected = 1))
+              }
+            case None => Some(MissingSourceColumns(strategyType))
+          }
+        case other => Some(WrongStrategyType(received = other, expected = strategyType))
+      }
     }
-  }
 }

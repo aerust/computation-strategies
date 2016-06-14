@@ -25,9 +25,11 @@ case class UnknownSourceColumn[ColumnName](name: ColumnName)
 case class MissingSourceColumns(typ: StrategyType)
   extends ValidationError(s"Source columns not found when required for strategy type: $typ")
 
-case class MissingParameters(typ: StrategyType)
-  extends ValidationError(s"Computation strategy parameters not found when required for strategy type: $typ")
+case class MissingParameters(schema: ParameterSchema)
+  extends ValidationError(s"Missing required computation strategy parameters: ${schema.requiredFields}")
 
+case class MissingParameter(field: String)
+  extends ValidationError(s"""Missing computation strategy parameters field "$field"""")
 
 case class InvalidStrategyParameters(error: DecodeError)
   extends ValidationError(s"Unable to decode computation strategy parameters: ${error.english}")
@@ -43,8 +45,8 @@ object StrategyDefinition {
 
 @JsonKeyStrategy(Strategy.Underscore)
 case class InternalStrategyDefinition[ColumnId](strategyType: StrategyType,
-                                      sourceColumnIds: Seq[ColumnId],
-                                      parameters: JObject)
+                                                sourceColumnIds: Seq[ColumnId],
+                                                parameters: JObject)
 
 trait ComputationStrategy {
 
@@ -83,7 +85,9 @@ object ComputationStrategy {
     strategies(definition.typ).validate(definition, columns)
 }
 
-trait ParameterSchema
+trait ParameterSchema {
+  def requiredFields: Seq[String]
+}
 
 trait Augment[T] {
 
