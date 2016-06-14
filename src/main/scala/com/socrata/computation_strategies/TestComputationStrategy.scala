@@ -1,14 +1,16 @@
 package com.socrata.computation_strategies
 
-import com.rojoma.json.v3.codec.JsonDecode
+import com.rojoma.json.v3.codec.{Path, DecodeError, JsonDecode}
 import com.rojoma.json.v3.util.{AutomaticJsonCodecBuilder, Strategy, JsonKeyStrategy}
 import com.socrata.soql.types.{SoQLText, SoQLType}
 
 @JsonKeyStrategy(Strategy.Underscore)
-case class TestParameterSchema(concatText: String) extends ParameterSchema
+case class TestParameterSchema(concatText: String)
 
-object TestParameterSchema {
+object TestParameterSchema extends ParameterSchema {
   implicit val codec = AutomaticJsonCodecBuilder[TestParameterSchema]
+
+  override def requiredFields = Seq("concat_text")
 }
 
 /**
@@ -31,36 +33,25 @@ object TestComputationStrategy extends ComputationStrategy {
 
   override protected def validate[ColumnName : JsonDecode](definition: StrategyDefinition[ColumnName],
                                                            columns: Option[Map[ColumnName, SoQLType]]):
-  Option[ValidationError] = {
-    val StrategyDefinition(typ, optSourceColumns, optParameters) = definition
-    typ match {
-      case StrategyType.Test =>
-        optSourceColumns match {
-          case Some(sourceColumns) =>
-            sourceColumns.length match {
-              case 1 =>
-                // validate type of source column optionally
-                if (columns.isDefined) {
-                  val name = sourceColumns.head
-                  val error = columns.get.get(name) match {
-                    case Some(SoQLText) => None
-                    case Some(other) => Some(WrongSourceColumnType(name, other, SoQLText))
-                    case None => Some(UnknownSourceColumn(name))
-                  }
-                  if (error.isDefined) return error
-                }
-                optParameters match {
-                  case Some(obj) => JsonDecode.fromJValue[TestParameterSchema](obj) match {
-                    case Right(parameters) => None
-                    case Left(error) => Some(InvalidStrategyParameters(error))
-                  }
-                  case None => Some(MissingParameters(strategyType))
-                }
-              case other => Some(WrongNumberOfSourceColumns(received = other, expected = 1))
-            }
-          case None => Some(MissingSourceColumns(strategyType))
+    Option[ValidationError] = definition match {
+      case StrategyDefinition(StrategyType.Test, Some(Seq(name)), Some(obj)) =>
+        // validate type of source column optionally
+        columns.foreach { cols =>
+          cols.get(name) match {
+            case Some(SoQLText) => {}
+            case Some(other) => return Some(WrongSourceColumnType(name, other, SoQLText))
+            case None => return Some(UnknownSourceColumn(name))
+          }
         }
-      case other => Some(WrongStrategyType(received = other, expected = strategyType))
+
+        JsonDecode.fromJValue[TestParameterSchema](obj) match {
+          case Right(parameters) => None
+          case Left(DecodeError.MissingField(field, Path.empty)) => Some(MissingParameter(field))
+          case Left(error) => Some(InvalidStrategyParameters(error))
+        }
+      case StrategyDefinition(StrategyType.Test, Some(cols), _) => Some(WrongNumberOfSourceColumns(cols.size, 1))
+      case StrategyDefinition(StrategyType.Test, None, _) => Some(MissingSourceColumns(strategyType))
+      case StrategyDefinition(StrategyType.Test, _, None) => Some(MissingParameters(TestParameterSchema))
+      case StrategyDefinition(other, _, _) => Some(WrongStrategyType(received = other, expected = strategyType))
     }
-  }
 }

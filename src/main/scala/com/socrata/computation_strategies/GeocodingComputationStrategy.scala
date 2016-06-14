@@ -1,7 +1,7 @@
 package com.socrata.computation_strategies
 
 import com.rojoma.json.v3.ast.JObject
-import com.rojoma.json.v3.codec.{JsonDecode, JsonEncode}
+import com.rojoma.json.v3.codec.{Path, DecodeError, JsonDecode, JsonEncode}
 import com.rojoma.json.v3.util._
 import com.socrata.soql.types.{SoQLNumber, SoQLText, SoQLPoint, SoQLType}
 
@@ -57,11 +57,12 @@ object FlexibleGeocodingDefaults {
 }
 
 case class GeocodingParameterSchema[T](sources: GeocodingSources[T], defaults: GeocodingDefaults, version: String)
-  extends ParameterSchema
 
-object GeocodingParameterSchema {
+object GeocodingParameterSchema extends ParameterSchema {
   implicit def encoder[T : JsonEncode] = AutomaticJsonEncodeBuilder[GeocodingParameterSchema[T]]
   implicit def decoder[T : JsonDecode] = AutomaticJsonDecodeBuilder[GeocodingParameterSchema[T]]
+
+  def requiredFields = Seq("defaults")
 }
 
 case class FlexibleGeocodingParameterSchema[T](sources: Option[GeocodingSources[T]],
@@ -110,9 +111,9 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
 
   case class GeocodingSourcesDoNotMatchSourceColumns[ColumnName](sourceColumns: Seq[ColumnName],
                                                                  sources: Option[GeocodingSources[ColumnName]])
-    extends ValidationError(s"Computation strategy 'parameters.sources' do not match 'source_columns'." +
-      s"\n\tsource_columns: $sourceColumns" +
-      s"\n\tparameters.sources: $sources")
+    extends ValidationError(s"""Computation strategy "parameters.sources" do not match "source_columns"; """""" +
+      s"source_columns: $sourceColumns, " +
+      s"parameters.sources: $sources")
 
   case class UnknownGeocodingApiVersion(version: String)
     extends ValidationError(s"Unknown geocoding api version: $version.")
@@ -161,16 +162,12 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
 
   override protected def validate[ColumnName : JsonDecode](definition: StrategyDefinition[ColumnName],
                                                            columns: Option[Map[ColumnName, SoQLType]]):
-  Option[ValidationError] = {
-    val StrategyDefinition(typ, optSourceColumns, optParameters) = definition
-    typ match {
-      case StrategyType.Geocoding =>
-        val parameters = optParameters match {
-          case Some(obj) => JsonDecode.fromJValue[GeocodingParameterSchema[ColumnName]](obj) match {
-            case Right(res) => res
-            case Left(error) => return Some(InvalidStrategyParameters(error))
-          }
-          case None => return Some(MissingParameters(strategyType))
+    Option[ValidationError] = definition match {
+      case StrategyDefinition(StrategyType.Geocoding, optSourceColumns, Some(obj)) =>
+        val parameters = JsonDecode.fromJValue[GeocodingParameterSchema[ColumnName]](obj) match {
+          case Right(res) => res
+          case Left(DecodeError.MissingField(field, Path.empty)) => return Some(MissingParameter(field))
+          case Left(error) => return Some(InvalidStrategyParameters(error))
         }
 
         // source columns and parameters.sources should match
@@ -180,15 +177,15 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
           return Some(GeocodingSourcesDoNotMatchSourceColumns(sourceColumns, Some(parameters.sources)))
 
         // source columns should have the correct soql type
-        if (columns.isDefined) {
+        columns.foreach { cols =>
           val sources = parameters.sources
           val sourceColumnTypeErrors = Seq(
-            validateSoQLType(sources.address, columns.get),
-            validateSoQLType(sources.locality, columns.get),
-            validateSoQLType(sources.subregion, columns.get),
-            validateSoQLType(sources.region, columns.get),
-            validateSoQLType(sources.postalCode, columns.get, numberOkay = true),
-            validateSoQLType(sources.country, columns.get)
+            validateSoQLType(sources.address, cols),
+            validateSoQLType(sources.locality, cols),
+            validateSoQLType(sources.subregion, cols),
+            validateSoQLType(sources.region, cols),
+            validateSoQLType(sources.postalCode, cols, numberOkay = true),
+            validateSoQLType(sources.country, cols)
           )
           if (sourceColumnTypeErrors.exists(_.isDefined)) return sourceColumnTypeErrors.filter(_.isDefined).head
         }
@@ -196,13 +193,12 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
         // country default is insured by successfully decoding
 
         // the version should be valid
-        if (!apiVersions.contains(parameters.version))
-          return Some(UnknownGeocodingApiVersion(parameters.version))
+        if (!apiVersions.contains(parameters.version)) return Some(UnknownGeocodingApiVersion(parameters.version))
 
         None
-      case other => Some(WrongStrategyType(received = other, expected = strategyType))
+      case StrategyDefinition(StrategyType.Geocoding, _, None) => Some(MissingParameters(GeocodingParameterSchema))
+      case StrategyDefinition(other, _, _) => Some(WrongStrategyType(received = other, expected = strategyType))
     }
-  }
 
   private def validateSoQLType[ColumnName](optName: Option[ColumnName],
                                            columns: Map[ColumnName, SoQLType],
