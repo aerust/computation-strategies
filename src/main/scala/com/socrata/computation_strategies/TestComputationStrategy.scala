@@ -49,7 +49,7 @@ object TestComputationStrategy extends ComputationStrategy {
           case Left(DecodeError.MissingField(field, Path.empty)) => Some(MissingParameter(field))
           case Left(error) => Some(InvalidStrategyParameters(error))
         }
-      case StrategyDefinition(StrategyType.Test, Some(cols), _) => Some(WrongNumberOfSourceColumns(cols.size, 1))
+      case StrategyDefinition(StrategyType.Test, Some(cols), Some(_)) => Some(WrongNumberOfSourceColumns(cols.size, 1))
       case StrategyDefinition(StrategyType.Test, None, _) => Some(MissingSourceColumns(strategyType))
       case StrategyDefinition(StrategyType.Test, _, None) => Some(MissingParameters(TestParameterSchema))
       case StrategyDefinition(other, _, _) => Some(WrongStrategyType(received = other, expected = strategyType))
