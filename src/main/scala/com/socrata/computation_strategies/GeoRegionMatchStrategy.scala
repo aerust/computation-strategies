@@ -26,7 +26,7 @@ object GeoRegionMatchStrategy {
           case Left(DecodeError.MissingField(field, Path.empty)) => Some(MissingParameter(field))
           case Left(error) => Some(InvalidStrategyParameters(error))
         }
-      case StrategyDefinition(`strategyType`, Some(cols), _) => Some(WrongNumberOfSourceColumns(cols.size, 1))
+      case StrategyDefinition(`strategyType`, Some(cols), Some(_)) => Some(WrongNumberOfSourceColumns(cols.size, 1))
       case StrategyDefinition(`strategyType`, None, _) => Some(MissingSourceColumns(strategyType))
       case StrategyDefinition(`strategyType`, _, None) =>  Some(MissingParameters(parameterSchema))
       case StrategyDefinition(other, _, _) => Some(WrongStrategyType(received = other, expected = strategyType))
