@@ -23,8 +23,8 @@ object GeoRegionMatchOnStringParameterSchema  extends ParameterSchema {
  *   - It has an optional field "parameters.primary_key" which is the primary key of the curated region // TODO ???
  *
  * For example:
- * { "type": "georegion_match_on_point",
- *   "source_columns": ["location_point"],
+ * { "type": "georegion_match_on_string",
+ *   "source_columns": ["location_string"],
  *   "parameters": {
  *     "region": "_nmuc-gpu5",
  *     "column": "column_1",
