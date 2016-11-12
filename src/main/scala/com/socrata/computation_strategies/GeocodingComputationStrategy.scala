@@ -7,11 +7,11 @@ import com.socrata.soql.types.{SoQLNumber, SoQLText, SoQLPoint, SoQLType}
 
 @JsonKeyStrategy(Strategy.Underscore)
 case class GeocodingSources[T](address: Option[T],
-                   locality: Option[T],
-                   subregion: Option[T],
-                   region: Option[T],
-                   postalCode: Option[T],
-                   country: Option[T])
+                               locality: Option[T],
+                               subregion: Option[T],
+                               region: Option[T],
+                               postalCode: Option[T],
+                               country: Option[T])
 
 object GeocodingSources {
   implicit def encoder[T : JsonEncode] = AutomaticJsonEncodeBuilder[GeocodingSources[T]]
@@ -212,4 +212,35 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
       }
     case None => None
   }
+
+  case class UnknownSourceColumnException[CN](cn: CN) extends Exception
+  override protected def transform[CN: JsonDecode, CI : JsonEncode](parameters: JObject, columns: Map[CN, CI]):
+    Either[ValidationError, JObject] = {
+      def map(cn: Option[CN]): Option[CI] = cn.map { cn =>
+        columns.getOrElse(cn, throw UnknownSourceColumnException(cn))
+      }
+
+      JsonDecode.fromJValue[FlexibleGeocodingParameterSchema[CN]](parameters) match {
+        case Right(FlexibleGeocodingParameterSchema(sources, defaults, version)) =>
+          try {
+            val transformed = sources.map { srcs: GeocodingSources[CN] =>
+              GeocodingSources[CI](
+                address = map(srcs.address),
+                locality = map(srcs.locality),
+                subregion = map(srcs.subregion),
+                region = map(srcs.region),
+                postalCode = map(srcs.postalCode),
+                country = map(srcs.country)
+              )
+            }
+
+            // should always be encoded to a JObject
+            Right(JsonEncode.toJValue(FlexibleGeocodingParameterSchema(transformed, defaults, version)).asInstanceOf[JObject])
+          } catch {
+            case UnknownSourceColumnException(cn) => Left(UnknownSourceColumn(cn))
+          }
+        case Left(DecodeError.MissingField(field, Path.empty)) => Left(MissingParameter(field))
+        case Left(error) => Left(InvalidStrategyParameters(error))
+      }
+    }
 }

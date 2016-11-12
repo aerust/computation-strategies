@@ -1,5 +1,6 @@
 package com.socrata.computation_strategies
 
+import com.rojoma.json.v3.ast.JObject
 import com.rojoma.json.v3.codec.{JsonEncode, JsonDecode}
 import com.rojoma.json.v3.util.{Strategy, JsonKeyStrategy, AutomaticJsonDecodeBuilder, AutomaticJsonEncodeBuilder}
 import com.socrata.soql.types.{SoQLPoint, SoQLNumber, SoQLType}
@@ -56,5 +57,21 @@ object GeoRegionMatchOnPointComputationStrategy extends ComputationStrategy {
           GeoRegionMatchOnPointParameterSchema,
           definition,
           columns)
+    }
+
+  def augment[ColumnName : JsonDecode : JsonEncode](definition: StrategyDefinition[ColumnName], primaryKey: ColumnName):
+    Either[ValidationError, StrategyDefinition[ColumnName]] = {
+      definition.parameters match {
+        case Some(params) =>
+          JsonDecode.fromJValue[GeoRegionMatchOnPointParameterSchema[String, ColumnName]](params) match {
+            case Right(GeoRegionMatchOnPointParameterSchema(region, _)) =>
+              Right(definition.copy(
+                parameters = Some(JsonEncode.toJValue[GeoRegionMatchOnPointParameterSchema[String, ColumnName]](
+                  GeoRegionMatchOnPointParameterSchema(region, Some(primaryKey))).asInstanceOf[JObject])
+              ))
+            case Left(error) => Left(InvalidStrategyParameters(error))
+          }
+        case None => Right(definition)
+      }
     }
 }

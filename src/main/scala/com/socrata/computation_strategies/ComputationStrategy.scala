@@ -65,6 +65,24 @@ trait ComputationStrategy {
 
   protected def validate[ColumnName : JsonDecode](definition: StrategyDefinition[ColumnName],
                                                   columns: Option[Map[ColumnName, SoQLType]]): Option[ValidationError]
+
+  def transform[CN: JsonDecode, CI : JsonEncode](definition: StrategyDefinition[CN], columns: Map[CN, CI]):
+    Either[ValidationError, StrategyDefinition[CI]] = {
+      val sourceColumns = definition.sourceColumns.map { seq => seq.map { cn =>
+        columns.getOrElse(cn, return Left(UnknownSourceColumn(cn)))
+      }}
+
+      val parameters = definition.parameters.map(transform(_, columns)) match {
+        case Some(Left(unknown)) => return Left(unknown)
+        case Some(Right(params)) => Some(params)
+        case None => None
+      }
+
+      Right(StrategyDefinition(definition.typ, sourceColumns, parameters))
+    }
+
+  protected def transform[CN: JsonDecode, CI : JsonEncode](parameters: JObject, columns: Map[CN, CI]):
+    Either[ValidationError, JObject] = Right(parameters) // No-op implementation
 }
 
 object ComputationStrategy {
@@ -83,6 +101,10 @@ object ComputationStrategy {
   def validate[ColumnName : JsonDecode](definition: StrategyDefinition[ColumnName],
                                         columns: Map[ColumnName, SoQLType]): Option[ValidationError] =
     strategies(definition.typ).validate(definition, columns)
+
+  def transform[CN: JsonDecode, CI : JsonEncode](definition: StrategyDefinition[CN],
+                                     columns: Map[CN, CI]): Either[ValidationError, StrategyDefinition[CI]] =
+    strategies(definition.typ).transform(definition, columns)
 }
 
 trait ParameterSchema {
@@ -90,7 +112,6 @@ trait ParameterSchema {
 }
 
 trait Augment[T] {
-
   def augment[ColumnName : JsonDecode : JsonEncode](definition: StrategyDefinition[ColumnName],
                                                    info: T): Either[ValidationError, StrategyDefinition[ColumnName]]
 }
