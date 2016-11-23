@@ -213,7 +213,7 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
     case None => None
   }
 
-  override protected def transform[CN: JsonDecode, CI : JsonEncode](parameters: JObject, columns: Map[CN, CI]):
+  override protected def transform[CN : JsonDecode, CI : JsonEncode](parameters: JObject, columns: Map[CN, CI]):
     Either[ValidationError, JObject] = {
       import EitherUtil._
 
@@ -232,7 +232,7 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
             } yield {
               val transformed = Some(GeocodingSources[CI](address, locality, subregion, region, postalCode, country))
               // should always be encoded to a JObject
-              return Right(JsonEncode.toJValue(FlexibleGeocodingParameterSchema(transformed, defaults, version)).asInstanceOf[JObject])
+              JsonEncode.toJValue(FlexibleGeocodingParameterSchema(transformed, defaults, version)).asInstanceOf[JObject]
             }
         case Right(_) => Right(parameters) // no source columns to transform
         case Left(DecodeError.MissingField(field, Path.empty)) => Left(MissingParameter(field))
