@@ -68,17 +68,14 @@ trait ComputationStrategy {
 
   def transform[CN: JsonDecode, CI : JsonEncode](definition: StrategyDefinition[CN], columns: Map[CN, CI]):
     Either[ValidationError, StrategyDefinition[CI]] = {
-      val sourceColumns = definition.sourceColumns.map { seq => seq.map { cn =>
-        columns.getOrElse(cn, return Left(UnknownSourceColumn(cn)))
-      }}
+      import EitherUtil._
 
-      val parameters = definition.parameters.map(transform(_, columns)) match {
-        case Some(Left(unknown)) => return Left(unknown)
-        case Some(Right(params)) => Some(params)
-        case None => None
+      for {
+        sourceColumns <- either(definition.sourceColumns.map(mapOrLeft(_, columns, UnknownSourceColumn(_ : CN)))).right
+        parameters <- either(definition.parameters.map(transform(_, columns))).right
+      } yield {
+        return Right(StrategyDefinition(definition.typ, sourceColumns, parameters))
       }
-
-      Right(StrategyDefinition(definition.typ, sourceColumns, parameters))
     }
 
   protected def transform[CN: JsonDecode, CI : JsonEncode](parameters: JObject, columns: Map[CN, CI]):
@@ -114,4 +111,20 @@ trait ParameterSchema {
 trait Augment[T] {
   def augment[ColumnName : JsonDecode : JsonEncode](definition: StrategyDefinition[ColumnName],
                                                    info: T): Either[ValidationError, StrategyDefinition[ColumnName]]
+}
+
+object EitherUtil {
+
+  def orLeft[T, U, V](t: T, map: Map[T, U], orElse: T => V): Either[V, U] =
+    Right(map.getOrElse(t, return Left(orElse(t))))
+
+  def mapOrLeft[T, U, V](seq: Seq[T], map: Map[T, U], orElse: T => V): Either[V, Seq[U]] =
+    Right(seq.map { t => map.getOrElse(t, return Left(orElse(t))) })
+
+  def either[T, U](option: Option[Either[T, U]]): Either[T, Option[U]] = option match {
+    case Some(Right(u)) => Right(Some(u))
+    case Some(Left(t)) => Left(t)
+    case None => Right(None)
+  }
+
 }

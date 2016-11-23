@@ -213,32 +213,28 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
     case None => None
   }
 
-  case class UnknownSourceColumnException[CN](cn: CN) extends Exception
   override protected def transform[CN: JsonDecode, CI : JsonEncode](parameters: JObject, columns: Map[CN, CI]):
     Either[ValidationError, JObject] = {
-      def map(cn: Option[CN]): Option[CI] = cn.map { cn =>
-        columns.getOrElse(cn, throw UnknownSourceColumnException(cn))
-      }
+      import EitherUtil._
+
+      def toCI(cn: Option[CN]): Either[ValidationError, Option[CI]] =
+        either(cn.map(orLeft(_, columns, UnknownSourceColumn(_ : CN))))
 
       JsonDecode.fromJValue[FlexibleGeocodingParameterSchema[CN]](parameters) match {
-        case Right(FlexibleGeocodingParameterSchema(sources, defaults, version)) =>
-          try {
-            val transformed = sources.map { srcs: GeocodingSources[CN] =>
-              GeocodingSources[CI](
-                address = map(srcs.address),
-                locality = map(srcs.locality),
-                subregion = map(srcs.subregion),
-                region = map(srcs.region),
-                postalCode = map(srcs.postalCode),
-                country = map(srcs.country)
-              )
+        case Right(FlexibleGeocodingParameterSchema(Some(sources), defaults, version)) =>
+            for {
+              address <- toCI(sources.address).right
+              locality <- toCI(sources.locality).right
+              subregion <- toCI(sources.subregion).right
+              region <- toCI(sources.region).right
+              postalCode <- toCI(sources.postalCode).right
+              country <- toCI(sources.country).right
+            } yield {
+              val transformed = Some(GeocodingSources[CI](address, locality, subregion, region, postalCode, country))
+              // should always be encoded to a JObject
+              return Right(JsonEncode.toJValue(FlexibleGeocodingParameterSchema(transformed, defaults, version)).asInstanceOf[JObject])
             }
-
-            // should always be encoded to a JObject
-            Right(JsonEncode.toJValue(FlexibleGeocodingParameterSchema(transformed, defaults, version)).asInstanceOf[JObject])
-          } catch {
-            case UnknownSourceColumnException(cn) => Left(UnknownSourceColumn(cn))
-          }
+        case Right(_) => Right(parameters) // no source columns to transform
         case Left(DecodeError.MissingField(field, Path.empty)) => Left(MissingParameter(field))
         case Left(error) => Left(InvalidStrategyParameters(error))
       }
