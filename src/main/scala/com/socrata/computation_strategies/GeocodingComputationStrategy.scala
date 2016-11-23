@@ -96,7 +96,7 @@ object FlexibleGeocodingParameterSchema {
  *           "country": "US" },
  *       "version": "v1" }}
  */
-object GeocodingComputationStrategy extends ComputationStrategy with Augment[FlexibleGeocodingDefaults] {
+object GeocodingComputationStrategy extends ComputationStrategy with AugmentParameters[FlexibleGeocodingDefaults] {
 
   val apiVersion = "v1"
   val apiVersions = Set(apiVersion)

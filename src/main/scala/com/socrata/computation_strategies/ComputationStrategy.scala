@@ -108,9 +108,9 @@ trait ParameterSchema {
   def requiredFields: Seq[String]
 }
 
-trait Augment[T] {
+trait AugmentParameters[T] {
   def augment[ColumnName : JsonDecode : JsonEncode](definition: StrategyDefinition[ColumnName],
-                                                   info: T): Either[ValidationError, StrategyDefinition[ColumnName]]
+                                                    info: T): Either[ValidationError, StrategyDefinition[ColumnName]]
 }
 
 object EitherUtil {
