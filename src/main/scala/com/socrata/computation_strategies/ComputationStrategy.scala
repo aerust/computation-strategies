@@ -65,6 +65,21 @@ trait ComputationStrategy {
 
   protected def validate[ColumnName : JsonDecode](definition: StrategyDefinition[ColumnName],
                                                   columns: Option[Map[ColumnName, SoQLType]]): Option[ValidationError]
+
+  def transform[CN : JsonDecode, CI : JsonEncode](definition: StrategyDefinition[CN], columns: Map[CN, CI]):
+    Either[ValidationError, StrategyDefinition[CI]] = {
+      import EitherUtil._
+
+      for {
+        sourceColumns <- either(definition.sourceColumns.map(mapOrLeft(_, columns, UnknownSourceColumn(_ : CN)))).right
+        parameters <- either(definition.parameters.map(transform(_, columns))).right
+      } yield {
+        StrategyDefinition(definition.typ, sourceColumns, parameters)
+      }
+    }
+
+  protected def transform[CN : JsonDecode, CI : JsonEncode](parameters: JObject, columns: Map[CN, CI]):
+    Either[ValidationError, JObject] = Right(parameters) // No-op implementation
 }
 
 object ComputationStrategy {
@@ -83,14 +98,33 @@ object ComputationStrategy {
   def validate[ColumnName : JsonDecode](definition: StrategyDefinition[ColumnName],
                                         columns: Map[ColumnName, SoQLType]): Option[ValidationError] =
     strategies(definition.typ).validate(definition, columns)
+
+  def transform[CN : JsonDecode, CI : JsonEncode](definition: StrategyDefinition[CN],
+                                     columns: Map[CN, CI]): Either[ValidationError, StrategyDefinition[CI]] =
+    strategies(definition.typ).transform(definition, columns)
 }
 
 trait ParameterSchema {
   def requiredFields: Seq[String]
 }
 
-trait Augment[T] {
-
+trait AugmentParameters[T] {
   def augment[ColumnName : JsonDecode : JsonEncode](definition: StrategyDefinition[ColumnName],
-                                                   info: T): Either[ValidationError, StrategyDefinition[ColumnName]]
+                                                    info: T): Either[ValidationError, StrategyDefinition[ColumnName]]
+}
+
+object EitherUtil {
+
+  def orLeft[T, U, V](t: T, map: Map[T, U], orElse: T => V): Either[V, U] =
+    Right(map.getOrElse(t, return Left(orElse(t))))
+
+  def mapOrLeft[T, U, V](seq: Seq[T], map: Map[T, U], orElse: T => V): Either[V, Seq[U]] =
+    Right(seq.map { t => map.getOrElse(t, return Left(orElse(t))) })
+
+  def either[T, U](option: Option[Either[T, U]]): Either[T, Option[U]] = option match {
+    case Some(Right(u)) => Right(Some(u))
+    case Some(Left(t)) => Left(t)
+    case None => Right(None)
+  }
+
 }

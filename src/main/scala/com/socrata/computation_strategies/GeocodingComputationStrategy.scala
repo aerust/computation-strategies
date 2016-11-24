@@ -7,11 +7,11 @@ import com.socrata.soql.types.{SoQLNumber, SoQLText, SoQLPoint, SoQLType}
 
 @JsonKeyStrategy(Strategy.Underscore)
 case class GeocodingSources[T](address: Option[T],
-                   locality: Option[T],
-                   subregion: Option[T],
-                   region: Option[T],
-                   postalCode: Option[T],
-                   country: Option[T])
+                               locality: Option[T],
+                               subregion: Option[T],
+                               region: Option[T],
+                               postalCode: Option[T],
+                               country: Option[T])
 
 object GeocodingSources {
   implicit def encoder[T : JsonEncode] = AutomaticJsonEncodeBuilder[GeocodingSources[T]]
@@ -96,7 +96,7 @@ object FlexibleGeocodingParameterSchema {
  *           "country": "US" },
  *       "version": "v1" }}
  */
-object GeocodingComputationStrategy extends ComputationStrategy with Augment[FlexibleGeocodingDefaults] {
+object GeocodingComputationStrategy extends ComputationStrategy with AugmentParameters[FlexibleGeocodingDefaults] {
 
   val apiVersion = "v1"
   val apiVersions = Set(apiVersion)
@@ -212,4 +212,31 @@ object GeocodingComputationStrategy extends ComputationStrategy with Augment[Fle
       }
     case None => None
   }
+
+  override protected def transform[CN : JsonDecode, CI : JsonEncode](parameters: JObject, columns: Map[CN, CI]):
+    Either[ValidationError, JObject] = {
+      import EitherUtil._
+
+      def toCI(cn: Option[CN]): Either[ValidationError, Option[CI]] =
+        either(cn.map(orLeft(_, columns, UnknownSourceColumn(_ : CN))))
+
+      JsonDecode.fromJValue[FlexibleGeocodingParameterSchema[CN]](parameters) match {
+        case Right(FlexibleGeocodingParameterSchema(Some(sources), defaults, version)) =>
+            for {
+              address <- toCI(sources.address).right
+              locality <- toCI(sources.locality).right
+              subregion <- toCI(sources.subregion).right
+              region <- toCI(sources.region).right
+              postalCode <- toCI(sources.postalCode).right
+              country <- toCI(sources.country).right
+            } yield {
+              val transformed = Some(GeocodingSources[CI](address, locality, subregion, region, postalCode, country))
+              // should always be encoded to a JObject
+              JsonEncode.toJValue(FlexibleGeocodingParameterSchema(transformed, defaults, version)).asInstanceOf[JObject]
+            }
+        case Right(_) => Right(parameters) // no source columns to transform
+        case Left(DecodeError.MissingField(field, Path.empty)) => Left(MissingParameter(field))
+        case Left(error) => Left(InvalidStrategyParameters(error))
+      }
+    }
 }
