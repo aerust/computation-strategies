@@ -1,5 +1,7 @@
 package com.socrata.computation_strategies
 
+import com.rojoma.json.v3.interpolation._
+import com.socrata.computation_strategies
 import com.socrata.computation_strategies.StrategyType._
 import org.scalatest.{ShouldMatchers, FunSuite}
 
@@ -48,6 +50,44 @@ class ComputationStrategyTest extends FunSuite with ShouldMatchers {
   test("Should be able to transform all strategy types") {
     forStrategyData { data =>
       ComputationStrategy.transform(data.fullDefinition, columnIds) should be (data.fullDefinitionTransformed)
+    }
+  }
+
+  test("Can decode region columns with 'strategy_type' keys") {
+    val computationStrat = json"""
+       {
+        "parameters": {
+          "primary_key": "_feature_id",
+          "region": "_4svm-3hip"
+        },
+        "source_columns": ["location1"],
+        "strategy_type": "georegion_match_on_point"
+       }
+    """
+    StrategyDefinition.decoder[String].decode(computationStrat) match {
+      case Right(stratDef) =>
+        stratDef.typ should be (GeoRegionMatchOnPoint)
+      case Left(err) =>
+        fail(err.english)
+    }
+  }
+
+  test("Can decode region columns with 'type' keys") {
+    val computationStrat = json"""
+       {
+        "parameters": {
+          "primary_key": "_feature_id",
+          "region": "_4svm-3hip"
+        },
+        "source_columns": ["location1"],
+        "type": "georegion_match_on_point"
+       }
+    """
+    StrategyDefinition.decoder[String].decode(computationStrat) match {
+      case Right(stratDef) =>
+        stratDef.typ should be (GeoRegionMatchOnPoint)
+      case Left(err) =>
+        fail(err.english)
     }
   }
 }

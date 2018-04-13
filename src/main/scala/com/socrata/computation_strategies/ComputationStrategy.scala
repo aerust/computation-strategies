@@ -1,7 +1,9 @@
 package com.socrata.computation_strategies
 
-import com.rojoma.json.v3.ast.JObject
+import com.rojoma.json.v3.ast.{JObject, JValue}
+import com.rojoma.json.v3.codec.JsonDecode.DecodeResult
 import com.rojoma.json.v3.codec.{DecodeError, JsonDecode, JsonEncode}
+import com.rojoma.json.v3.matcher.{POption, PObject, Variable}
 import com.rojoma.json.v3.util._
 import com.socrata.soql.types.SoQLType
 
@@ -40,8 +42,34 @@ case class StrategyDefinition[ColumnName](@JsonKey("type") typ: StrategyType,
 
 object StrategyDefinition {
   implicit def encoder[ColumnName : JsonEncode] = AutomaticJsonEncodeBuilder[StrategyDefinition[ColumnName]]
-  implicit def decoder[ColumnName : JsonDecode] = AutomaticJsonDecodeBuilder[StrategyDefinition[ColumnName]]
+  implicit def decoder[ColumnName : JsonDecode] = new JsonDecode[StrategyDefinition[ColumnName]] {
+    val typ = Variable.decodeOnly[StrategyType]
+    val sourceCols = Variable.decodeOnly[Seq[ColumnName]]
+    val params = Variable.decodeOnly[JObject]
+
+    val P1 = PObject (
+      "type" -> typ,
+      "source_columns" -> POption(sourceCols),
+      "parameters" -> POption(params)
+    )
+
+    val P2 = PObject (
+      "strategy_type" -> typ,
+      "source_columns" -> POption(sourceCols),
+      "parameters" -> POption(params)
+    )
+
+    def decode(x: JValue): DecodeResult[StrategyDefinition[ColumnName]] =
+      P1.matches(x).left.flatMap { err1 =>
+        P2.matches(x).left.map { err2 =>
+          DecodeError.join(List(err1, err2))
+        }
+      }.right.map { result =>
+        StrategyDefinition(typ(result), sourceCols.get(result), params.get(result))
+      }
+  }
 }
+
 
 @JsonKeyStrategy(Strategy.Underscore)
 case class InternalStrategyDefinition[ColumnId](strategyType: StrategyType,
