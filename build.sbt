@@ -1,5 +1,7 @@
+resolvers += "socrata" at "https://repo.socrata.com/artifactory/libs-release"
+
 val rojomaJsonV3 = "com.rojoma" %% "rojoma-json-v3" % "3.6.0"
-val soqlTypes = "com.socrata" %% "soql-types" % "2.0.11"
+val soqlTypes = "com.socrata" %% "soql-types" % "2.11.4"
 
 organization := "com.socrata"
 name := "computation-strategies"
