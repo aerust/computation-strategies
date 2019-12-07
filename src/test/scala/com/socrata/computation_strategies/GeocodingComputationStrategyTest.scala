@@ -1,9 +1,9 @@
 package com.socrata.computation_strategies
 
 import com.socrata.computation_strategies.GeocodingComputationStrategy.GeocodingSourcesDoNotMatchSourceColumns
-import org.scalatest.{ShouldMatchers, FunSuite}
+import org.scalatest.{Matchers, FunSuite}
 
-class GeocodingComputationStrategyTest extends FunSuite with ShouldMatchers {
+class GeocodingComputationStrategyTest extends FunSuite with Matchers {
   import TestData._
   import TestData.GeocodingData._
 
