@@ -11,7 +11,7 @@ scalacOptions ++= Seq("-deprecation", "-feature")
 resolvers += "socrata" at "https://repo.socrata.com/artifactory/libs-release"
 
 libraryDependencies ++= Seq(
-  "com.rojoma" %% "rojoma-json-v3" % "3.10.0",
+  "com.rojoma" %% "rojoma-json-v3" % "3.10.1",
   "com.socrata" %% "soql-types" % "2.11.21",
   "org.scalatest" %% "scalatest" % "3.0.8" % "test"
 )
