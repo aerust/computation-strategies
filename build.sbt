@@ -6,6 +6,8 @@ scalaVersion := "2.12.8"
 
 crossScalaVersions := Seq("2.10.4", "2.11.8", scalaVersion.value)
 
+mimaPreviousArtifacts := Set("com.socrata" %% "computation-strategies" % "0.1.3")
+
 scalacOptions ++= Seq("-deprecation", "-feature")
 
 resolvers += "socrata" at "https://repo.socrata.com/artifactory/libs-release"
