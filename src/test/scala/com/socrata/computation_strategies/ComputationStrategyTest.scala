@@ -3,9 +3,9 @@ package com.socrata.computation_strategies
 import com.rojoma.json.v3.interpolation._
 import com.socrata.computation_strategies
 import com.socrata.computation_strategies.StrategyType._
-import org.scalatest.{ShouldMatchers, FunSuite}
+import org.scalatest.{Matchers, FunSuite}
 
-class ComputationStrategyTest extends FunSuite with ShouldMatchers {
+class ComputationStrategyTest extends FunSuite with Matchers {
   import TestData._
 
   val strategies = StrategyType.allStrategyTypes - Test // Don't care to test Test strategy
